@@ -175,4 +175,57 @@ function RenderNode:toggle_reveal(path)
   end
 end
 
+---@param target_path string
+---@return boolean success - true if the path was found and revealed, false otherwise
+function RenderNode:reveal_path(target_path)
+  -- Normalize paths to handle different formats
+  local normalized_target = vim.fn.fnamemodify(target_path, ':p'):gsub('/$', '')
+  local normalized_self = vim.fn.fnamemodify(self.path, ':p'):gsub('/$', '')
+
+  -- If this is the target path, ensure it's revealed (if it's a directory)
+  if normalized_self == normalized_target then
+    if self.type == 'directory' then
+      self.revealed = true
+    end
+    return true
+  end
+
+  -- If the target path doesn't start with our path, it's not under this node
+  if not vim.startswith(normalized_target, normalized_self) then
+    return false
+  end
+
+  -- This directory is on the path to the target, so reveal it
+  if self.type == 'directory' then
+    self.revealed = true
+
+    -- Scan directory to ensure children are populated
+    local results = self:scan_dir()
+    for _, result in ipairs(results) do
+      if not self:find(result.path) then
+        self:add_child(RenderNode.new(result))
+      end
+    end
+
+    -- Recursively reveal path in children
+    for _, child in ipairs(self.children) do
+      if child:reveal_path(target_path) then
+        return true
+      end
+    end
+  end
+
+  return false
+end
+
+---@param file_path string
+---@return boolean success - true if all parent directories were revealed, false otherwise
+function RenderNode:reveal_file_path(file_path)
+  -- Get the directory containing the file
+  local parent_dir = vim.fn.fnamemodify(file_path, ':h')
+
+  -- Reveal all parent directories leading to the file
+  return self:reveal_path(parent_dir)
+end
+
 return RenderNode
